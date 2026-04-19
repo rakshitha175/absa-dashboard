@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Aspect-Based Sentiment & Emotion Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080d1a;
+      --surface: #0f1726;
+      --surface2: #162035;
+      --border: #1e2d4a;
+      --accent: #4f8ef7;
+      --accent2: #a78bfa;
+      --accent3: #34d399;
+      --accent4: #f87171;
+      --accent5: #fbbf24;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --font: 'Sora', sans-serif;
+      --mono: 'IBM Plex Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: .9rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .live-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--accent3);
+      box-shadow: 0 0 8px var(--accent3);
+      animation: pulse 2s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .topbar h1 { font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
+    .topbar .subtitle { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-left: auto; }
+
+    /* ── LAYOUT ── */
+    .page { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; }
+    @media(max-width:900px) { .grid3,.grid4 { grid-template-columns: 1fr 1fr; } }
+    @media(max-width:600px) { .grid2,.grid3,.grid4 { grid-template-columns: 1fr; } }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .card-title {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 1rem;
+    }
+    .mb1 { margin-bottom: 1rem; }
+
+    /* ── SEARCH SECTION ── */
+    .search-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .search-row {
+      display: flex;
+      gap: .75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-input {
+      flex: 1;
+      min-width: 180px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .6rem 1rem;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .count-select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .6rem .75rem;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+    .fetch-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .6rem 1.4rem;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity .2s;
+    }
+    .fetch-btn:hover { opacity: .85; }
+    .fetch-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .analyze-all-btn {
+      background: var(--accent2);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: .6rem 1.4rem;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .analyze-all-btn:hover { opacity: .85; }
+    .analyze-all-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* QUICK HASHTAG CHIPS */
+    .chip-row { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .75rem; }
+    .chip {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      background: transparent;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.08); }
+
+    /* ── SERVER STATUS ── */
+    .server-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: .4rem .75rem;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+      width: fit-content;
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .status-dot.online { background: var(--accent3); box-shadow: 0 0 6px var(--accent3); }
+    .status-dot.offline { background: var(--accent4); }
+
+    /* ── PIPELINE ── */
+    .pipeline {
+      display: flex;
+      gap: .35rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .pipe-step {
+      font-size: 10px;
+      font-family: var(--mono);
+      padding: 3px 9px;
+      border-radius: 4px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all .3s;
+    }
+    .pipe-step.active { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.1); }
+    .pipe-step.done { border-color: var(--accent3); color: var(--accent3); background: rgba(52,211,153,.07); }
+    .pipe-arrow { color: var(--border); font-size: 10px; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TWEET LIST ── */
+    .tweet-list { display: flex; flex-direction: column; gap: .6rem; max-height: 420px; overflow-y: auto; }
+    .tweet-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem;
+      cursor: pointer;
+      transition: border-color .2s;
+      position: relative;
+    }
+    .tweet-card:hover { border-color: var(--accent); }
+    .tweet-card.selected { border-color: var(--accent2); background: rgba(167,139,250,.06); }
+    .tweet-card.analysed { border-left: 3px solid var(--accent3); }
+    .tweet-author { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .tweet-text { font-size: 13px; line-height: 1.6; }
+    .tweet-badges { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .5rem; }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      font-family: var(--mono);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .badge-pos { background: rgba(52,211,153,.12); color: #34d399; }
+    .badge-neg { background: rgba(248,113,113,.12); color: #f87171; }
+    .badge-neu { background: rgba(100,116,139,.15); color: #94a3b8; }
+    .badge-happy { background: rgba(251,191,36,.12); color: #fbbf24; }
+    .badge-angry { background: rgba(248,113,113,.12); color: #f87171; }
+    .badge-sad { background: rgba(167,139,250,.12); color: #a78bfa; }
+    .badge-fear { background: rgba(79,142,247,.12); color: #4f8ef7; }
+
+    /* ── STAT CARDS ── */
+    .stat-card { text-align: center; background: var(--surface2); border-radius: 10px; padding: 1rem; }
+    .stat-num { font-size: 26px; font-weight: 600; font-family: var(--mono); }
+    .stat-lbl { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
+
+    /* ── ASPECT TABLE ── */
+    .aspect-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .aspect-table th {
+      text-align: left;
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      padding: .4rem .5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .aspect-table td { padding: .45rem .5rem; border-bottom: 1px solid rgba(30,45,74,.5); }
+    .aspect-table tr:last-child td { border: none; }
+    .conf-bar-wrap { width: 80px; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+    .conf-bar-fill { height: 100%; border-radius: 3px; }
+
+    /* ── TOKENS ── */
+    .token-wrap { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .token {
+      font-size: 11px;
+      font-family: var(--mono);
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .token.kept { color: var(--text); background: var(--surface2); }
+    .token.stop { text-decoration: line-through; opacity: .35; }
+    .token.aspect-tok { background: rgba(167,139,250,.15); border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── TFIDF ── */
+    .tfidf-row { display: flex; align-items: center; gap: 8px; padding: .28rem 0; font-size: 11px; font-family: var(--mono); }
+    .tfidf-score { min-width: 36px; color: var(--muted); }
+    .tfidf-word { min-width: 90px; color: var(--text); }
+    .tfidf-bar-wrap { flex: 1; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+    .tfidf-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+
+    /* ── SUMMARY ── */
+    .summary-box {
+      font-size: 13px;
+      line-height: 1.8;
+      color: #94a3b8;
+      font-style: italic;
+      padding: .9rem 1rem;
+      background: var(--surface2);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* ── PLACEHOLDER ── */
+    .placeholder {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .placeholder .ico { font-size: 28px; display: block; margin-bottom: .5rem; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── TABS ── */
+    .tab-row { display: flex; gap: 4px; margin-bottom: 1rem; }
+    .tab {
+      font-size: 11px; font-family: var(--mono);
+      padding: 4px 12px; border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      cursor: pointer; transition: all .15s;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── PROGRESS ── */
+    .progress-bar {
+      height: 3px; background: var(--surface2);
+      border-radius: 2px; overflow: hidden; margin-bottom: 1rem;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px; transition: width .4s ease;
+      width: 0%;
+    }
+
+    /* ── LOCATION MAP PLACEHOLDER ── */
+    .location-grid { display: flex; flex-direction: column; gap: .4rem; max-height: 180px; overflow-y: auto; }
+    .loc-row { display: flex; align-items: center; gap: 8px; font-size: 12px; font-family: var(--mono); }
+    .loc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .loc-name { color: var(--text); min-width: 120px; }
+    .loc-sent { min-width: 55px; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="live-dot"></div>
+  <div>
+    <h1>Real-Time Aspect-Based Sentiment &amp; Emotion Analysis</h1>
+  </div>
+  <div class="subtitle">Text Mining &amp; NLP — University Project</div>
+</div>
+
+<div class="page">
+
+  <!-- SERVER STATUS -->
+  <div class="server-status" id="serverStatus">
+    <div class="status-dot online" id="statusDot"></div>
+    <span id="statusText">✅ Mock mode — no Twitter API or backend needed</span>
+  </div>
+
+  <!-- SEARCH / FETCH -->
+  <div class="search-section mb1">
+    <div class="search-row">
+      <input class="search-input" id="queryInput" placeholder="#iPhone, #IPL, #AI …" value="#iPhone" />
+      <select class="count-select" id="tweetCount">
+        <option value="5">5 tweets</option>
+        <option value="10" selected>10 tweets</option>
+        <option value="20">20 tweets</option>
+        <option value="50">50 tweets</option>
+      </select>
+      <button class="fetch-btn" id="fetchBtn" onclick="fetchTweets()">
+        <div class="spinner" id="fetchSpinner"></div>
+        <span id="fetchBtnText">Generate Mock Tweets</span>
+      </button>
+      <button class="analyze-all-btn" id="analyzeAllBtn" onclick="analyzeAll()" disabled>
+        Analyse All
+      </button>
+    </div>
+    <div class="chip-row">
+      <button class="chip" onclick="setQuery('#iPhone')">📱 #iPhone</button>
+      <button class="chip" onclick="setQuery('#IPL2025')">🏏 #IPL2025</button>
+      <button class="chip" onclick="setQuery('#AI')">🤖 #AI</button>
+      <button class="chip" onclick="setQuery('#Tesla')">🚗 #Tesla</button>
+      <button class="chip" onclick="setQuery('#ChatGPT')">💬 #ChatGPT</button>
+      <button class="chip" onclick="setQuery('#Samsung')">📲 #Samsung</button>
+      <button class="chip" onclick="setQuery('#Netflix')">🎬 #Netflix</button>
+      <button class="chip" onclick="setQuery('#Modi')">🗳️ #Modi</button>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="pipeline" id="pipeline">
+    <div class="pipe-step" id="ps-collect">1. collect</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-preprocess">2. preprocess</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-tokenize">3. tokenize</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-tfidf">4. tf-idf</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-pos">5. POS tagging</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-sentiment">6. sentiment</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-emotion">7. emotion</div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" id="ps-viz">8. visualise</div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <!-- MAIN GRID -->
+  <div class="grid2 mb1">
+
+    <!-- LEFT: Tweet List -->
+    <div class="card">
+      <div class="card-title">Live Tweets <span id="tweetCountLabel" style="margin-left:8px;color:var(--accent)"></span></div>
+      <div class="tweet-list" id="tweetList">
+        <div class="placeholder">
+          <span class="ico">🐦</span>
+          Click "Generate Mock Tweets" to load realistic sample tweets.<br />
+          No Twitter API or backend server required.
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Selected Tweet Analysis -->
+    <div class="card">
+      <div class="card-title">Aspect-Level Analysis</div>
+      <div id="aspectPanel">
+        <div class="placeholder">
+          <span class="ico">🔍</span>
+          Select a tweet to see aspect-based sentiment breakdown.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="grid4 mb1" id="statsRow">
+    <div class="stat-card">
+      <div class="stat-num" id="statTotal">—</div>
+      <div class="stat-lbl">Tweets Analysed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent3)" id="statPos">—</div>
+      <div class="stat-lbl">Positive</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--accent4)" id="statNeg">—</div>
+      <div class="stat-lbl">Negative</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--muted)" id="statNeu">—</div>
+      <div class="stat-lbl">Neutral</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW -->
+  <div class="grid3 mb1">
+    <div class="card">
+      <div class="card-title">Sentiment Distribution</div>
+      <div style="position:relative;height:200px">
+        <canvas id="sentPieChart" role="img" aria-label="Sentiment distribution pie chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Emotion Distribution</div>
+      <div style="position:relative;height:200px">
+        <canvas id="emoBarChart" role="img" aria-label="Emotion distribution bar chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sentiment Trend (per tweet)</div>
+      <div style="position:relative;height:200px">
+        <canvas id="trendLineChart" role="img" aria-label="Sentiment trend line chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- NLP DETAILS ROW -->
+  <div class="grid2 mb1">
+    <div class="card">
+      <div class="card-title">NLP Preprocessing — Token Viewer</div>
+      <div id="tokenPanel">
+        <div class="placeholder" style="padding:1rem">Select and analyse a tweet to see tokens.</div>
+      </div>
+      <div style="margin-top:1rem">
+        <div class="card-title">TF-IDF Feature Weights</div>
+        <div id="tfidfPanel">
+          <div class="placeholder" style="padding:.5rem">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top Aspects Across All Tweets</div>
+      <div id="topAspectsPanel">
+        <div class="placeholder" style="padding:1rem">Analyse tweets to see aggregated aspects.</div>
+      </div>
+      <div style="margin-top:1rem">
+        <div class="card-title">Location-Based Sentiment</div>
+        <div class="location-grid" id="locationPanel">
+          <div class="placeholder" style="padding:.5rem;font-size:11px">No location data yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI SUMMARY -->
+  <div class="card">
+    <div class="card-title">AI Chatbot Summary</div>
+    <div class="summary-box" id="summaryBox">
+      Analysed tweets will be summarised here by AI.
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+  // ── CONFIG ──────────────────────────────────────────────────────
+  // ── No API key needed — analysis runs 100% locally in your browser ──
+
+  // ── MOCK TWEET DATA ──────────────────────────────────────────────
+  // Realistic mock users
+  const MOCK_USERS = [
+    { author: "Priya Sharma",    username: "priya_tech92",    location: "Mumbai, IN" },
+    { author: "Alex Turner",     username: "alexturner_dev",  location: "London, UK" },
+    { author: "Rahul Mehta",     username: "rahulmehta99",    location: "Hyderabad, IN" },
+    { author: "Jessica Liu",     username: "jess_liu_writes", location: "San Francisco, US" },
+    { author: "Omar Hassan",     username: "omarh_digital",   location: "Dubai, UAE" },
+    { author: "Sneha Rao",       username: "sneharao_ml",     location: "Bengaluru, IN" },
+    { author: "Liam O'Brien",    username: "liamobtech",      location: "Dublin, IE" },
+    { author: "Fatima Al-Zahra", username: "fatima_writes",   location: "Cairo, EG" },
+    { author: "Carlos Mendez",   username: "c_mendez_ux",     location: "Mexico City, MX" },
+    { author: "Ananya Singh",    username: "ananya_codes",    location: "Delhi, IN" },
+    { author: "Ben Nwachukwu",   username: "ben_nwachukwu",   location: "Lagos, NG" },
+    { author: "Sophie Martin",   username: "sophiemartin_fr", location: "Paris, FR" },
+    { author: "Vikram Patel",    username: "vikramp_iot",     location: "Pune, IN" },
+    { author: "Emma Wilson",     username: "emma_wilson_uk",  location: "Manchester, UK" },
+    { author: "Diego Flores",    username: "diegoflores_mx",  location: "Guadalajara, MX" },
+    { author: "Nadia Petrov",    username: "nadiap_tech",     location: "Moscow, RU" },
+    { author: "Arjun Nair",      username: "arjun_nair_dev",  location: "Kochi, IN" },
+    { author: "Mei Chen",        username: "meichen_ai",      location: "Shanghai, CN" },
+    { author: "Tyler Brooks",    username: "tylerbrooks_us",  location: "Austin, US" },
+    { author: "Layla Ibrahim",   username: "layla_ibrahim",   location: "Riyadh, SA" },
+  ];
+
+  // Topic-specific tweet templates (placeholders replaced at runtime)
+  const TWEET_TEMPLATES = {
+    default: [
+      "Just tried {topic} for the first time — absolutely blown away by the performance. The {feature1} feature is a game changer! #mustbuy",
+      "Honestly disappointed with {topic}. Expected so much more after all the hype. {feature1} is still broken after the latest update 😤",
+      "{topic} update is live and I have mixed feelings. Love the new {feature1} but the {feature2} feels rushed and buggy.",
+      "Can we talk about how {topic} is dominating the market right now? The {feature1} alone justifies the price 🔥",
+      "Switched from {competitor} to {topic} last week — night and day difference in {feature1}. No regrets.",
+      "The {topic} team really outdid themselves this time. {feature1} is smoother than ever and battery life improved a lot.",
+      "Why is everyone hyping {topic}? The {feature1} is mediocre at best and the price is way too high for what you get.",
+      "Hot take: {topic} has the best {feature1} in its category right now. Fight me 👊",
+      "Just got my hands on {topic} — setup was painless and the {feature1} works exactly as advertised. Happy customer 😊",
+      "{topic} just crashed on me for the 3rd time this week. The {feature1} issues need to be fixed ASAP. Very frustrating.",
+      "Loving how {topic} handles {feature1}. Tried {competitor} before but this is on another level tbh.",
+      "Unpopular opinion: {topic} peaked two years ago. The current {feature1} feels like a downgrade compared to before.",
+      "My whole team switched to {topic} and productivity is through the roof. {feature1} integration is chef's kiss 🤌",
+      "Warning: {topic} {feature1} is NOT working properly after the last update. Multiple reports in the community. Stay away for now.",
+      "The new {topic} design is gorgeous but I'm worried the {feature1} might have issues in the long run. Time will tell.",
+      "Finally jumped on the {topic} bandwagon and I'm not disappointed at all. {feature1} and {feature2} exceeded my expectations 💯",
+      "Spent an hour with {topic} customer support — terrible experience. Simple {feature1} problem still unresolved. Unacceptable.",
+      "Saw the {topic} demo at the conference today. {feature1} was jaw-dropping. The future is here 🚀",
+      "Day 30 with {topic}: {feature1} is holding up great, {feature2} could use improvement, but overall solid choice.",
+      "{topic} pricing just went up again. At this point the {feature1} better be made of gold 😂",
+    ]
+  };
+
+  // Topic-specific feature words for realistic tweet generation
+  const TOPIC_FEATURES = {
+    "#iphone":   { feature1: ["camera", "battery life", "Face ID", "display", "chip performance", "iOS update"],
+                   feature2: ["charging speed", "software", "Siri", "storage price"],
+                   competitor: ["Samsung Galaxy", "Pixel 9", "OnePlus"] },
+    "#iphone16": { feature1: ["camera", "Action Button", "A18 chip", "display", "battery life"],
+                   feature2: ["charging speed", "Dynamic Island", "price tag"],
+                   competitor: ["Samsung S24", "Pixel 9 Pro", "Xiaomi 14"] },
+    "#samsung":  { feature1: ["Galaxy AI", "camera zoom", "display quality", "One UI", "S Pen"],
+                   feature2: ["update speed", "bloatware", "price"],
+                   competitor: ["iPhone 16", "Pixel 9", "OnePlus 12"] },
+    "#tesla":    { feature1: ["Autopilot", "range", "build quality", "software OTA", "supercharging"],
+                   feature2: ["panel gaps", "customer service", "price hike"],
+                   competitor: ["Rivian", "BYD", "Lucid Motors"] },
+    "#chatgpt":  { feature1: ["reasoning", "code generation", "memory feature", "GPT-4o", "plugins"],
+                   feature2: ["hallucinations", "context window", "subscription price"],
+                   competitor: ["Claude", "Gemini", "Grok"] },
+    "#netflix":  { feature1: ["password sharing", "content library", "UI design", "4K streaming", "offline mode"],
+                   feature2: ["price increase", "ad tier", "app performance"],
+                   competitor: ["Prime Video", "Disney+", "Apple TV+"] },
+    "#ipl2025":  { feature1: ["batting lineup", "bowling attack", "fielding", "DRS calls", "pitch conditions"],
+                   feature2: ["umpiring decisions", "toss luck", "team selection"],
+                   competitor: ["the opposition team", "the previous season", "last year's winners"] },
+    "#ai":       { feature1: ["reasoning ability", "code output", "multimodal features", "speed", "accuracy"],
+                   feature2: ["hallucination rate", "cost", "data privacy"],
+                   competitor: ["older models", "traditional software", "human experts"] },
+    "#modi":     { feature1: ["economic policy", "infrastructure push", "foreign relations", "digital India", "welfare schemes"],
+                   feature2: ["opposition concerns", "regional issues", "media coverage"],
+                   competitor: ["the opposition", "previous governments", "global leaders"] },
+    "#elonmusk": { feature1: ["X platform changes", "SpaceX achievements", "Tesla strategy", "AI venture", "statements"],
+                   feature2: ["controversies", "policy decisions", "social media presence"],
+                   competitor: ["other tech CEOs", "traditional media", "regulators"] },
+  };
+
+  function getMockFeatures(query) {
+    const key = query.toLowerCase().replace(/\s+/g,'');
+    for (const [k, v] of Object.entries(TOPIC_FEATURES)) {
+      if (key.includes(k.replace('#',''))) return v;
+    }
+    // fallback generic
+    return {
+      feature1: ["performance", "design", "interface", "pricing", "support", "features"],
+      feature2: ["updates", "compatibility", "documentation"],
+      competitor: ["the competition", "alternatives", "older version"]
+    };
+  }
+
+  function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function generateMockTweets(query, count) {
+    const features = getMockFeatures(query);
+    const templates = TWEET_TEMPLATES.default;
+    const usedUsers = [...MOCK_USERS].sort(() => Math.random() - 0.5).slice(0, count);
+    const topicLabel = query.startsWith('#') ? query : '#' + query.replace(/\s+/g, '');
+
+    return usedUsers.map((user, i) => {
+      const template = templates[i % templates.length];
+      const text = template
+        .replace(/{topic}/g, topicLabel)
+        .replace(/{feature1}/g, pickRandom(features.feature1))
+        .replace(/{feature2}/g, pickRandom(features.feature2))
+        .replace(/{competitor}/g, pickRandom(features.competitor));
+      return {
+        id: 'mock_' + i,
+        text,
+        created_at: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+        author: user.author,
+        username: user.username,
+        location: user.location,
+        likes: Math.floor(Math.random() * 500),
+        retweets: Math.floor(Math.random() * 150),
+      };
+    });
+  }
+
+  // ── STATE ────────────────────────────────────────────────────────
+  let tweets = [];
+  let results = [];
+  let sentPie = null, emoBar = null, trendLine = null;
+
+  // ── UTILITY ──────────────────────────────────────────────────────
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function sentColor(s) {
+    return s === 'Positive' ? '#34d399' : s === 'Negative' ? '#f87171' : '#64748b';
+  }
+  function emoIcon(e) {
+    return { Happy: '😊', Angry: '😠', Sad: '😢', Fear: '😨', Neutral: '😐' }[e] || '😐';
+  }
+  function sentBadge(s) {
+    return `<span class="badge badge-${s.toLowerCase()}">${s}</span>`;
+  }
+  function emoBadge(e) {
+    return `<span class="badge badge-${e.toLowerCase()}">${emoIcon(e)} ${e}</span>`;
+  }
+
+  function setQuery(q) {
+    document.getElementById('queryInput').value = q;
+  }
+
+  // ── SERVER CHECK (mock — no backend needed) ──────────────────────
+  function checkServer() {
+    // No backend needed in mock mode — status dot is always green
+  }
+
+  // ── PIPELINE ANIMATION ───────────────────────────────────────────
+  const pipeSteps = ['collect','preprocess','tokenize','tfidf','pos','sentiment','emotion','viz'];
+  function setPipe(step) {
+    const idx = pipeSteps.indexOf(step);
+    pipeSteps.forEach((s, i) => {
+      const el = document.getElementById('ps-' + s);
+      if (!el) return;
+      el.className = 'pipe-step' + (i < idx ? ' done' : i === idx ? ' active' : '');
+    });
+    document.getElementById('progressFill').style.width = ((idx + 1) / pipeSteps.length * 100) + '%';
+  }
+
+  // ── FETCH TWEETS (mock — no Twitter API needed) ───────────────────
+  async function fetchTweets() {
+    const query = document.getElementById('queryInput').value.trim() || '#iPhone';
+    const max = parseInt(document.getElementById('tweetCount').value);
+    const btn = document.getElementById('fetchBtn');
+    const spinner = document.getElementById('fetchSpinner');
+    const btnText = document.getElementById('fetchBtnText');
+
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnText.textContent = 'Generating…';
+    setPipe('collect');
+
+    // Simulate a small async delay for realism
+    await sleep(400);
+
+    tweets = generateMockTweets(query, max);
+    results = new Array(tweets.length).fill(null);
+
+    renderTweetList();
+    document.getElementById('tweetCountLabel').textContent = `(${tweets.length} mock tweets)`;
+    document.getElementById('analyzeAllBtn').disabled = false;
+    setPipe('preprocess');
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnText.textContent = 'Generate Mock Tweets';
+  }
+
+  // ── RENDER TWEET LIST ────────────────────────────────────────────
+  function renderTweetList() {
+    const list = document.getElementById('tweetList');
+    if (!tweets.length) {
+      list.innerHTML = '<div class="placeholder">No tweets found for this query.</div>';
+      return;
+    }
+    list.innerHTML = tweets.map((t, i) => {
+      const r = results[i];
+      const badges = r ? `${sentBadge(r.overall_sentiment)} ${emoBadge(r.overall_emotion)}` : '';
+      return `
+        <div class="tweet-card ${r ? 'analysed' : ''}" id="tc-${i}" onclick="selectTweet(${i})">
+          <div class="tweet-author">
+            <span>@${t.username} · ${t.author}</span>
+            <span>${t.location || ''}</span>
+          </div>
+          <div class="tweet-text">${t.text.substring(0, 200)}${t.text.length > 200 ? '…' : ''}</div>
+          ${r ? `<div class="tweet-badges">${badges}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // ── SELECT TWEET ─────────────────────────────────────────────────
+  async function selectTweet(idx) {
+    document.querySelectorAll('.tweet-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('tc-' + idx)?.classList.add('selected');
+
+    if (results[idx]) {
+      renderAspectPanel(results[idx], tweets[idx]);
+      return;
+    }
+    await analyseSingle(idx);
+  }
+
+  // ── ANALYSE SINGLE ───────────────────────────────────────────────
+  async function analyseSingle(idx) {
+    const tweet = tweets[idx];
+    if (!tweet) return;
+
+    setPipe('tokenize');
+    await sleep(200);
+    setPipe('tfidf');
+    await sleep(200);
+    setPipe('pos');
+
+    try {
+      // ── PURE LOCAL NLP ENGINE — no API, no CORS, works from file:/// ──
+
+      const text = tweet.text;
+
+      // 1. TOKENISE
+      const rawTokens = text.toLowerCase().replace(/[^a-z0-9'\s#@]/g, ' ').split(/\s+/).filter(Boolean);
+
+      // 2. STOPWORDS
+      const STOPWORDS = new Set(['i','me','my','we','our','you','your','he','she','it','they','them',
+        'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','is','are',
+        'was','were','be','been','being','have','has','had','do','does','did','will','would','could',
+        'should','may','might','shall','can','need','this','that','these','those','am','so','if','as',
+        'up','out','about','into','through','just','now','very','too','also','not','no','nor','than',
+        'then','when','where','how','what','which','who','after','before','while','its','it\'s','their',
+        'there','here','all','each','more','most','other','some','such','only','own','same','than','so',
+        'because','get','got','been','let','even','still','back','way','long','great','good','new','old',
+        've','ll','re','s','t','d','m','rt']);
+
+      const stopwordsFound = rawTokens.filter(t => STOPWORDS.has(t));
+      const filteredTokens = rawTokens.filter(t => !STOPWORDS.has(t) && t.length > 1 && !/^[#@]/.test(t));
+
+      // 3. STEM (simple suffix-stripping Porter-lite)
+      function stem(w) {
+        return w.replace(/ing$/, '').replace(/tion$/, '').replace(/ness$/, '')
+                .replace(/ment$/, '').replace(/able$/, '').replace(/ible$/, '')
+                .replace(/ful$/, '').replace(/less$/, '').replace(/ly$/, '')
+                .replace(/ies$/, 'y').replace(/ied$/, 'y').replace(/es$/, '')
+                .replace(/ed$/, '').replace(/er$/, '').replace(/est$/, '')
+                .replace(/s$/, '');
+      }
+      const stemmed = filteredTokens.map(stem);
+      const preprocessed = stemmed.join(' ');
+
+      // 4. TF-IDF (single-doc TF × log(1/df) approximated by word rarity)
+      const tf = {};
+      filteredTokens.forEach(w => { tf[w] = (tf[w] || 0) + 1; });
+      const total = filteredTokens.length || 1;
+      // Common words get low IDF; rare topic-words get high IDF
+      const COMMON = new Set(['said','like','want','need','think','know','time','people','look','come',
+        'make','take','see','use','go','try','got','one','two','three','four','five','first','last',
+        'every','many','much','well','right','left','really','actually','literally','basically']);
+      const keywordsTfidf = Object.entries(tf)
+        .map(([word, count]) => {
+          const idf = COMMON.has(word) ? 0.3 : word.length > 6 ? 1.2 : 0.8;
+          return { word, score: parseFloat(((count / total) * idf).toFixed(2)) };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+
+      // 5. SENTIMENT LEXICON
+      const POS_WORDS = new Set(['good','great','amazing','love','excellent','perfect','awesome','best',
+        'fantastic','wonderful','happy','glad','enjoy','enjoyed','brilliant','outstanding','superb',
+        'pleased','impressive','beautiful','nice','positive','better','improved','fast','smooth',
+        'game','changer','dominating','justifies','blown','away','exceeded','solid','clean','fresh',
+        'innovative','powerful','efficient','reliable','intuitive','seamless','sleek','gorgeous',
+        'joy','excited','thrilled','success','win','champion','victory','proud','hope','hopeful']);
+      const NEG_WORDS = new Set(['bad','terrible','awful','hate','worst','horrible','poor','broken',
+        'slow','crash','bug','issue','problem','fail','failed','disappointing','disappointed','mediocre',
+        'overpriced','expensive','useless','waste','frustrating','frustrated','annoying','annoyed',
+        'laggy','glitchy','rushed','downgrade','concerned','worried','scared','angry','upset','sad',
+        'lost','miss','missed','boring','dull','wrong','incorrect','error','damage','hurt','regret',
+        'unacceptable','terrible','inferior','lacking','mediocre','weak','unstable']);
+
+      const posHits = filteredTokens.filter(w => POS_WORDS.has(stem(w)));
+      const negHits = filteredTokens.filter(w => NEG_WORDS.has(stem(w)));
+
+      // Check for negation ("not good", "never worked", etc.)
+      const rawLower = text.toLowerCase();
+      const negationPattern = /\b(not|never|no|don't|doesn't|didn't|won't|can't|hardly|barely)\s+\w+/g;
+      let negationFlips = 0;
+      let m;
+      while ((m = negationPattern.exec(rawLower)) !== null) negationFlips++;
+
+      let posScore = posHits.length;
+      let negScore = negHits.length + negationFlips;
+      const totalSentWords = posScore + negScore || 1;
+
+      let overall_sentiment, overall_confidence;
+      if (posScore > negScore + 0.5) {
+        overall_sentiment = 'Positive';
+        overall_confidence = parseFloat(Math.min(0.95, 0.55 + posScore / totalSentWords * 0.4).toFixed(2));
+      } else if (negScore > posScore + 0.5) {
+        overall_sentiment = 'Negative';
+        overall_confidence = parseFloat(Math.min(0.95, 0.55 + negScore / totalSentWords * 0.4).toFixed(2));
+      } else {
+        overall_sentiment = 'Neutral';
+        overall_confidence = 0.55;
+      }
+
+      // 6. EMOTION LEXICON
+      const EMOTION_MAP = {
+        Happy:  new Set(['love','amazing','great','happy','joy','awesome','excited','glad','fantastic',
+                         'brilliant','excellent','wonderful','thrilled','proud','dominating','champion',
+                         'victory','win','best','perfect','enjoy','pleased','beautiful','fresh']),
+        Angry:  new Set(['hate','angry','frustrated','furious','annoying','annoyed','terrible','awful',
+                         'unacceptable','broken','crash','useless','waste','wrong','horrible','worst']),
+        Sad:    new Set(['sad','disappointed','disappointing','miss','lost','poor','regret','worse',
+                         'downgrade','boring','dull','mediocre','inferior','lacking','concerned']),
+        Fear:   new Set(['worried','scared','fear','worried','unstable','risky','danger','unsafe',
+                         'warning','careful','issue','problem','bug','glitch','error'])
+      };
+      const emoScores = { Happy: 0, Angry: 0, Sad: 0, Fear: 0 };
+      filteredTokens.forEach(w => {
+        const s = stem(w);
+        for (const [emo, lexicon] of Object.entries(EMOTION_MAP)) {
+          if (lexicon.has(w) || lexicon.has(s)) emoScores[emo]++;
+        }
+      });
+      const emoTotal = Object.values(emoScores).reduce((a, b) => a + b, 0) || 1;
+      const emotion_scores = {};
+      for (const [e, c] of Object.entries(emoScores)) {
+        emotion_scores[e] = parseFloat((c / emoTotal).toFixed(2));
+      }
+      const overall_emotion = Object.entries(emoScores).sort((a, b) => b[1] - a[1])[0][0];
+
+      // 7. ASPECT EXTRACTION — noun-like words (not in stopwords, not sentiment words, length > 3)
+      const NOUN_INDICATORS = new Set(['camera','battery','display','screen','performance','speed',
+        'design','price','quality','feature','update','software','hardware','support','service',
+        'interface','app','system','network','storage','memory','chip','processor','keyboard',
+        'charging','speaker','microphone','fingerprint','face','button','color','size','weight',
+        'build','material','lineup','batting','bowling','fielding','toss','umpire','pitch',
+        'content','library','streaming','subscription','algorithm','model','accuracy','reasoning',
+        'ui','ux','policy','economy','infrastructure','strategy','security','privacy','data',
+        'platform','account','token','api','latency','output','input','response','result','score',
+        'autopilot','range','panel','door','motor','charger','supercharger','delivery','warranty']);
+
+      const aspectCandidates = filteredTokens.filter(w =>
+        w.length > 3 &&
+        !STOPWORDS.has(w) &&
+        !POS_WORDS.has(w) &&
+        !NEG_WORDS.has(w) &&
+        (NOUN_INDICATORS.has(w) || NOUN_INDICATORS.has(stem(w)) ||
+         (w.length > 5 && !/ing$|ed$|ly$/.test(w)))
+      );
+
+      // Deduplicate aspects
+      const seenAspects = new Set();
+      const aspects = [];
+      for (const w of aspectCandidates) {
+        const key = stem(w);
+        if (seenAspects.has(key)) continue;
+        seenAspects.add(key);
+
+        // Find sentiment around this word in original text
+        const wIdx = rawTokens.indexOf(w);
+        const window = rawTokens.slice(Math.max(0, wIdx - 3), wIdx + 4);
+        const wPos = window.filter(t => POS_WORDS.has(t) || POS_WORDS.has(stem(t))).length;
+        const wNeg = window.filter(t => NEG_WORDS.has(t) || NEG_WORDS.has(stem(t))).length;
+        const localNeg = window.some(t => /^(not|never|no|don't|doesn't|didn't)$/.test(t));
+        let asp_sent = wPos > wNeg ? 'Positive' : wNeg > wPos ? 'Negative' : overall_sentiment;
+        if (localNeg) asp_sent = asp_sent === 'Positive' ? 'Negative' : asp_sent === 'Negative' ? 'Positive' : 'Neutral';
+
+        const emoVotes = { Happy: 0, Angry: 0, Sad: 0, Fear: 0 };
+        window.forEach(t => {
+          for (const [e, lex] of Object.entries(EMOTION_MAP)) {
+            if (lex.has(t) || lex.has(stem(t))) emoVotes[e]++;
+          }
+        });
+        const asp_emo = Object.entries(emoVotes).sort((a, b) => b[1] - a[1])[0][0];
+        const conf = parseFloat(Math.min(0.95, 0.6 + (wPos + wNeg) * 0.08).toFixed(2));
+
+        // Extract phrase snippet
+        const origIdx = text.toLowerCase().indexOf(w);
+        const phrase = origIdx >= 0 ? text.slice(Math.max(0, origIdx - 10), origIdx + w.length + 10).trim() : w;
+
+        aspects.push({ aspect: w, sentiment: asp_sent, emotion: asp_emo, confidence: conf, phrase });
+        if (aspects.length >= 5) break;
+      }
+
+      // 8. AI SUMMARY (template-based, reads actual results)
+      const posCount = aspects.filter(a => a.sentiment === 'Positive').length;
+      const negCount = aspects.filter(a => a.sentiment === 'Negative').length;
+      const topAspect = aspects[0]?.aspect || 'the topic';
+      const summaryTemplates = {
+        Positive: `Public sentiment is largely positive, with users expressing ${overall_emotion.toLowerCase()} emotions especially around ${topAspect}.`,
+        Negative: `Users show negative sentiment overall, with ${overall_emotion.toLowerCase()} emotions dominating discussions about ${topAspect}.`,
+        Neutral:  `Sentiment is mixed or neutral, with both positive and negative views expressed about ${topAspect}.`
+      };
+      const ai_summary = summaryTemplates[overall_sentiment];
+
+      const result = {
+        overall_sentiment, overall_confidence, overall_emotion, emotion_scores,
+        aspects, tokens: filteredTokens, stopwords_removed: stopwordsFound,
+        keywords_tfidf: keywordsTfidf, preprocessed, ai_summary
+      };
+
+      setPipe('sentiment');
+      await sleep(150);
+      setPipe('emotion');
+      await sleep(150);
+      setPipe('viz');
+
+      results[idx] = result;
+      renderTweetList();
+      renderAspectPanel(result, tweet);
+      updateCharts();
+      updateStats();
+      updateTopAspects();
+      updateLocationPanel();
+
+    } catch (e) {
+      document.getElementById('aspectPanel').innerHTML = `
+        <div class="placeholder" style="color:var(--accent4)">
+          Analysis failed.<br><small>${e.message}</small>
+        </div>`;
+    }
+  }
+
+  // ── ANALYSE ALL ──────────────────────────────────────────────────
+  async function analyzeAll() {
+    document.getElementById('analyzeAllBtn').disabled = true;
+    for (let i = 0; i < tweets.length; i++) {
+      if (!results[i]) {
+        await analyseSingle(i);
+        await sleep(500); // rate limit buffer
+      }
+    }
+    document.getElementById('analyzeAllBtn').disabled = false;
+  }
+
+  // ── RENDER ASPECT PANEL ──────────────────────────────────────────
+  function renderAspectPanel(r, tweet) {
+    const panel = document.getElementById('aspectPanel');
+
+    const aspectRows = (r.aspects || []).map(a => {
+      const pct = Math.round(a.confidence * 100);
+      const col = sentColor(a.sentiment);
+      return `<tr>
+        <td style="color:var(--accent2);font-family:var(--mono)">${a.aspect}</td>
+        <td>${sentBadge(a.sentiment)}</td>
+        <td>${emoBadge(a.emotion)}</td>
+        <td>
+          <div class="conf-bar-wrap"><div class="conf-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:5px">${pct}%</span>
+        </td>
+        <td style="color:var(--muted);font-size:11px;font-style:italic">${a.phrase || ''}</td>
+      </tr>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div style="margin-bottom:.75rem">
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          ${sentBadge(r.overall_sentiment)}
+          ${emoBadge(r.overall_emotion)}
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${Math.round(r.overall_confidence*100)}% confidence</span>
+        </div>
+      </div>
+      ${aspectRows ? `
+      <table class="aspect-table">
+        <thead><tr>
+          <th>Aspect</th><th>Sentiment</th><th>Emotion</th><th>Confidence</th><th>Phrase</th>
+        </tr></thead>
+        <tbody>${aspectRows}</tbody>
+      </table>` : '<div class="placeholder" style="padding:.5rem">No aspects detected.</div>'}
+      <div style="margin-top:1rem" class="summary-box">${r.ai_summary || ''}</div>
+    `;
+
+    // Token panel
+    const allTokens = r.tokens || tweet.text.split(' ');
+    const stopSet = new Set((r.stopwords_removed || []).map(w => w.toLowerCase()));
+    const aspectWords = new Set((r.aspects || []).map(a => a.aspect.toLowerCase()));
+    document.getElementById('tokenPanel').innerHTML = `
+      <div class="token-wrap">${allTokens.map(t => {
+        const clean = t.toLowerCase().replace(/[^a-z]/g,'');
+        if (aspectWords.has(clean)) return `<span class="token aspect-tok">${t}</span>`;
+        if (stopSet.has(clean)) return `<span class="token stop">${t}</span>`;
+        return `<span class="token kept">${t}</span>`;
+      }).join('')}</div>
+      <div style="margin-top:.5rem;font-size:11px;color:var(--muted);font-family:var(--mono)">
+        Purple = aspect noun &nbsp;|&nbsp; Strikethrough = stopword removed &nbsp;|&nbsp; White = kept
+      </div>
+      <div style="margin-top:.75rem;font-size:12px;font-family:var(--mono);color:var(--accent3);padding:.5rem;background:var(--surface2);border-radius:6px">${r.preprocessed || ''}</div>
+    `;
+
+    // TF-IDF
+    document.getElementById('tfidfPanel').innerHTML = (r.keywords_tfidf || []).slice(0,8).map(k => `
+      <div class="tfidf-row">
+        <div class="tfidf-score">${k.score.toFixed(2)}</div>
+        <div class="tfidf-word">${k.word}</div>
+        <div class="tfidf-bar-wrap"><div class="tfidf-bar-fill" style="width:${Math.round(k.score*100)}%"></div></div>
+      </div>`).join('');
+
+    document.getElementById('summaryBox').textContent = '"' + r.ai_summary + '"';
+  }
+
+  // ── CHARTS ───────────────────────────────────────────────────────
+  function updateCharts() {
+    const valid = results.filter(Boolean);
+    if (!valid.length) return;
+
+    const pos = valid.filter(r => r.overall_sentiment === 'Positive').length;
+    const neg = valid.filter(r => r.overall_sentiment === 'Negative').length;
+    const neu = valid.filter(r => r.overall_sentiment === 'Neutral').length;
+
+    // Sentiment Pie
+    if (sentPie) sentPie.destroy();
+    sentPie = new Chart(document.getElementById('sentPieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Positive','Negative','Neutral'],
+        datasets: [{ data: [pos,neg,neu], backgroundColor: ['#34d399','#f87171','#475569'], borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Emotion Bar
+    const emoTotals = { Happy:0, Angry:0, Sad:0, Fear:0, Neutral:0 };
+    valid.forEach(r => { if (r.overall_emotion) emoTotals[r.overall_emotion]++; });
+    if (emoBar) emoBar.destroy();
+    emoBar = new Chart(document.getElementById('emoBarChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Happy','Angry','Sad','Fear','Neutral'],
+        datasets: [{
+          data: Object.values(emoTotals),
+          backgroundColor: ['#fbbf24','#f87171','#a78bfa','#4f8ef7','#475569'],
+          borderRadius: 5, borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#1e2d4a' }, ticks: { color: '#64748b', font: { size: 10 } } },
+          y: { grid: { color: '#1e2d4a' }, ticks: { color: '#64748b', font: { size: 10 } }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Trend Line
+    const trendLabels = valid.map((_, i) => 'T' + (i + 1));
+    const trendVals = valid.map(r => r.overall_sentiment === 'Positive' ? 1 : r.overall_sentiment === 'Negative' ? -1 : 0);
+    if (trendLine) trendLine.destroy();
+    trendLine = new Chart(document.getElementById('trendLineChart'), {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: [{
+          data: trendVals,
+          borderColor: '#4f8ef7',
+          backgroundColor: 'rgba(79,142,247,.1)',
+          pointBackgroundColor: trendVals.map(v => v > 0 ? '#34d399' : v < 0 ? '#f87171' : '#64748b'),
+          pointRadius: 5, fill: true, tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#1e2d4a' }, ticks: { color: '#64748b', font: { size: 10 } } },
+          y: {
+            grid: { color: '#1e2d4a' },
+            ticks: { color: '#64748b', font: { size: 10 }, callback: v => v > 0 ? 'Pos' : v < 0 ? 'Neg' : 'Neu' },
+            min: -1.5, max: 1.5
+          }
+        }
+      }
+    });
+  }
+
+  // ── STATS ────────────────────────────────────────────────────────
+  function updateStats() {
+    const valid = results.filter(Boolean);
+    document.getElementById('statTotal').textContent = valid.length;
+    document.getElementById('statPos').textContent = valid.filter(r => r.overall_sentiment === 'Positive').length;
+    document.getElementById('statNeg').textContent = valid.filter(r => r.overall_sentiment === 'Negative').length;
+    document.getElementById('statNeu').textContent = valid.filter(r => r.overall_sentiment === 'Neutral').length;
+  }
+
+  // ── TOP ASPECTS ──────────────────────────────────────────────────
+  function updateTopAspects() {
+    const counts = {};
+    results.filter(Boolean).forEach(r => {
+      (r.aspects || []).forEach(a => {
+        if (!counts[a.aspect]) counts[a.aspect] = { pos: 0, neg: 0, neu: 0 };
+        if (a.sentiment === 'Positive') counts[a.aspect].pos++;
+        else if (a.sentiment === 'Negative') counts[a.aspect].neg++;
+        else counts[a.aspect].neu++;
+      });
+    });
+
+    const entries = Object.entries(counts).sort((a, b) => (b[1].pos + b[1].neg + b[1].neu) - (a[1].pos + a[1].neg + a[1].neu)).slice(0, 8);
+    if (!entries.length) return;
+
+    document.getElementById('topAspectsPanel').innerHTML = entries.map(([name, c]) => {
+      const total = c.pos + c.neg + c.neu || 1;
+      const dom = c.pos >= c.neg && c.pos >= c.neu ? 'Positive' : c.neg >= c.pos && c.neg >= c.neu ? 'Negative' : 'Neutral';
+      return `
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border)">
+          <div style="min-width:90px;font-size:12px;font-family:var(--mono);color:var(--accent2)">${name}</div>
+          <div style="flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;display:flex">
+            <div style="width:${c.pos/total*100}%;background:#34d399"></div>
+            <div style="width:${c.neg/total*100}%;background:#f87171"></div>
+            <div style="width:${c.neu/total*100}%;background:#475569"></div>
+          </div>
+          ${sentBadge(dom)}
+        </div>`;
+    }).join('');
+  }
+
+  // ── LOCATION PANEL ───────────────────────────────────────────────
+  function updateLocationPanel() {
+    const locs = tweets.map((t, i) => ({ loc: t.location, r: results[i] })).filter(x => x.loc && x.r);
+    if (!locs.length) return;
+    document.getElementById('locationPanel').innerHTML = locs.map(({ loc, r }) => `
+      <div class="loc-row">
+        <div class="loc-dot" style="background:${sentColor(r.overall_sentiment)}"></div>
+        <div class="loc-name">${loc.substring(0, 20)}</div>
+        ${sentBadge(r.overall_sentiment)}
+      </div>`).join('');
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────────
+  checkServer();
+</script>
+</body>
+</html>
